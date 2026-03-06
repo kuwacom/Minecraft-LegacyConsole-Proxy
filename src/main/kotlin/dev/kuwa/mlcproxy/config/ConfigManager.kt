@@ -8,14 +8,16 @@ import kotlin.io.path.bufferedWriter
 import kotlin.io.path.exists
 
 /**
- * `config.toml` の読み書きと参照を担当する設定マネージャ
+ * `config/config.toml` の読み書きと参照を担当する設定マネージャ
  *
- * 現在は proxy 設定を扱う
- *
- * 例
+ * よく使う例
  * ```kotlin
- * val config = ConfigManager.init()
- * println(config.proxy.targetHost)
+ * val config = ConfigManager.current()
+ * val proxy = ConfigManager.proxy
+ *
+ * ConfigManager.update {
+ *     it.copy(proxy = it.proxy.copy(listenPort = 25570))
+ * }
  * ```
  */
 object ConfigManager {
@@ -29,15 +31,22 @@ object ConfigManager {
         private set
 
     /**
-     * proxy 設定を直接取得するショートカット
-     *
-     * 例
-     * ```kotlin
-     * val proxy = ConfigManager.proxy
-     * ```
+     * proxy 設定のみを簡単に取得するショートカット
      */
     val proxy: ProxyConfig
         get() = current().proxy
+
+    /**
+     * protocol 設定のみを簡単に取得するショートカット
+     */
+    val protocol: ProtocolConfig
+        get() = current().protocol
+
+    /**
+     * discovery 設定のみを簡単に取得するショートカット
+     */
+    val discovery: DiscoveryConfig
+        get() = current().discovery
 
     /**
      * 設定を初期化する
@@ -68,11 +77,6 @@ object ConfigManager {
 
     /**
      * 設定ファイルを再読込する
-     *
-     * 例
-     * ```kotlin
-     * val latest = ConfigManager.reload()
-     * ```
      */
     fun reload(): Config {
         synchronized(lock) {
@@ -86,11 +90,6 @@ object ConfigManager {
 
     /**
      * メモリ上の設定を `config.toml` に保存する
-     *
-     * 例
-     * ```kotlin
-     * ConfigManager.save()
-     * ```
      */
     fun save() {
         synchronized(lock) {
@@ -110,7 +109,7 @@ object ConfigManager {
      * 例
      * ```kotlin
      * ConfigManager.update {
-     *     it.copy(proxy = it.proxy.copy(listenPort = 25570))
+     *     it.copy(proxy = it.proxy.copy(targetPort = 25566))
      * }
      * ```
      */
@@ -124,12 +123,8 @@ object ConfigManager {
 
     /**
      * 現在の設定を取得する
-     * 未初期化の場合は自動で `init()` を実行する
      *
-     * 例
-     * ```kotlin
-     * val current = ConfigManager.current()
-     * ```
+     * 未初期化の場合は自動で `init()` を実行する
      */
     fun current(): Config {
         if (::config.isInitialized) {
@@ -161,14 +156,53 @@ object ConfigManager {
             targetPort = (proxyTable?.getLong("target_port")?.toInt()) ?: defaults.proxy.targetPort
         )
 
+        val protocolTable = result.getTable("protocol")
+        val protocolDefaults = defaults.protocol
+        val protocol = protocolDefaults.copy(
+            mlcTransportMode = protocolTable?.getString("mlc_transport_mode") ?: protocolDefaults.mlcTransportMode,
+            mlcNetVersion = (protocolTable?.getLong("mlc_net_version")?.toInt()) ?: protocolDefaults.mlcNetVersion,
+            mlcGameProtocolVersion = (protocolTable?.getLong("mlc_game_protocol_version")?.toInt())
+                ?: protocolDefaults.mlcGameProtocolVersion,
+            javaProtocolVersion = (protocolTable?.getLong("java_protocol_version")?.toInt())
+                ?: protocolDefaults.javaProtocolVersion,
+            javaHandshakeHost = protocolTable?.getString("java_handshake_host")
+                ?: proxy.targetHost,
+            javaHandshakePort = (protocolTable?.getLong("java_handshake_port")?.toInt())
+                ?: proxy.targetPort
+        )
+
+        val discoveryTable = result.getTable("discovery")
+        val discoveryDefaults = defaults.discovery
+        val discovery = discoveryDefaults.copy(
+            enabled = discoveryTable?.getBoolean("enabled") ?: discoveryDefaults.enabled,
+            port = (discoveryTable?.getLong("port")?.toInt()) ?: discoveryDefaults.port,
+            advertiseIntervalMs = discoveryTable?.getLong("advertise_interval_ms")
+                ?: discoveryDefaults.advertiseIntervalMs,
+            respondToQueries = discoveryTable?.getBoolean("respond_to_queries")
+                ?: discoveryDefaults.respondToQueries,
+            hostName = discoveryTable?.getString("host_name") ?: discoveryDefaults.hostName,
+            maxPlayers = (discoveryTable?.getLong("max_players")?.toInt()) ?: discoveryDefaults.maxPlayers,
+            gameHostSettings = discoveryTable?.getLong("game_host_settings") ?: discoveryDefaults.gameHostSettings,
+            texturePackParentId = discoveryTable?.getLong("texture_pack_parent_id")
+                ?: discoveryDefaults.texturePackParentId,
+            subTexturePackId = (discoveryTable?.getLong("sub_texture_pack_id")?.toInt())
+                ?: discoveryDefaults.subTexturePackId
+        )
+
         validatePort("proxy.listen_port", proxy.listenPort)
         validatePort("proxy.target_port", proxy.targetPort)
+        validatePort("protocol.java_handshake_port", protocol.javaHandshakePort)
+        validateMlcTransportMode(protocol.mlcTransportMode)
+        validatePort("discovery.port", discovery.port)
+        validateDiscovery(discovery)
 
-        return Config(proxy = proxy)
+        return Config(proxy = proxy, protocol = protocol, discovery = discovery)
     }
 
     private fun encodeToml(config: Config): String {
         val p = config.proxy
+        val protocol = config.protocol
+        val discovery = config.discovery
         return buildString {
             appendLine("# Minecraft LegacyConsole Proxy configuration")
             appendLine("[proxy]")
@@ -176,6 +210,25 @@ object ConfigManager {
             appendLine("listen_port = ${p.listenPort}")
             appendLine("""target_host = "${escapeTomlString(p.targetHost)}"""")
             appendLine("target_port = ${p.targetPort}")
+            appendLine()
+            appendLine("[protocol]")
+            appendLine("""mlc_transport_mode = "${escapeTomlString(protocol.mlcTransportMode)}"""")
+            appendLine("mlc_net_version = ${protocol.mlcNetVersion}")
+            appendLine("mlc_game_protocol_version = ${protocol.mlcGameProtocolVersion}")
+            appendLine("java_protocol_version = ${protocol.javaProtocolVersion}")
+            appendLine("""java_handshake_host = "${escapeTomlString(protocol.javaHandshakeHost)}"""")
+            appendLine("java_handshake_port = ${protocol.javaHandshakePort}")
+            appendLine()
+            appendLine("[discovery]")
+            appendLine("enabled = ${discovery.enabled}")
+            appendLine("port = ${discovery.port}")
+            appendLine("advertise_interval_ms = ${discovery.advertiseIntervalMs}")
+            appendLine("respond_to_queries = ${discovery.respondToQueries}")
+            appendLine("""host_name = "${escapeTomlString(discovery.hostName)}"""")
+            appendLine("max_players = ${discovery.maxPlayers}")
+            appendLine("game_host_settings = ${discovery.gameHostSettings}")
+            appendLine("texture_pack_parent_id = ${discovery.texturePackParentId}")
+            appendLine("sub_texture_pack_id = ${discovery.subTexturePackId}")
         }
     }
 
@@ -188,6 +241,34 @@ object ConfigManager {
     private fun validatePort(name: String, value: Int) {
         require(value in 1..65535) {
             "$name must be between 1 and 65535, but was $value"
+        }
+    }
+
+    private fun validateMlcTransportMode(value: String) {
+        val normalized = value.uppercase()
+        require(normalized == "LENGTH_PREFIXED_32BE" || normalized == "RAW") {
+            "protocol.mlc_transport_mode must be LENGTH_PREFIXED_32BE or RAW, but was $value"
+        }
+    }
+
+    private fun validateDiscovery(discovery: DiscoveryConfig) {
+        require(discovery.advertiseIntervalMs in 100L..60_000L) {
+            "discovery.advertise_interval_ms must be between 100 and 60000, but was ${discovery.advertiseIntervalMs}"
+        }
+        require(discovery.hostName.isNotBlank()) {
+            "discovery.host_name must not be blank"
+        }
+        require(discovery.maxPlayers in 1..255) {
+            "discovery.max_players must be between 1 and 255, but was ${discovery.maxPlayers}"
+        }
+        require(discovery.gameHostSettings in 0L..0xFFFF_FFFFL) {
+            "discovery.game_host_settings must be between 0 and 4294967295, but was ${discovery.gameHostSettings}"
+        }
+        require(discovery.texturePackParentId in 0L..0xFFFF_FFFFL) {
+            "discovery.texture_pack_parent_id must be between 0 and 4294967295, but was ${discovery.texturePackParentId}"
+        }
+        require(discovery.subTexturePackId in 0..255) {
+            "discovery.sub_texture_pack_id must be between 0 and 255, but was ${discovery.subTexturePackId}"
         }
     }
 

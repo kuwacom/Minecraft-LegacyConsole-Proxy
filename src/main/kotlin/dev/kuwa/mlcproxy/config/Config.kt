@@ -12,16 +12,13 @@ package dev.kuwa.mlcproxy.config
  * ```
  */
 data class Config(
-    val proxy: ProxyConfig = ProxyConfig.default()
+    val proxy: ProxyConfig = ProxyConfig.default(),
+    val protocol: ProtocolConfig = ProtocolConfig.default(),
+    val discovery: DiscoveryConfig = DiscoveryConfig.default()
 ) {
     companion object {
         /**
          * デフォルト設定を返す
-         *
-         * 例
-         * ```kotlin
-         * val config = Config.default()
-         * ```
          */
         fun default(): Config = Config()
     }

@@ -5,12 +5,6 @@ package dev.kuwa.mlcproxy.config
  *
  * - `listen*` は待受先
  * - `target*` は転送先サーバー
- *
- * 例
- * ```kotlin
- * val proxy = ProxyConfig.default()
- * println("${proxy.listenHost}:${proxy.listenPort}")
- * ```
  */
 data class ProxyConfig(
     val listenHost: String,
@@ -21,11 +15,6 @@ data class ProxyConfig(
     companion object {
         /**
          * Proxy 用のデフォルト値を返す
-         *
-         * 例
-         * ```kotlin
-         * val proxy = ProxyConfig.default()
-         * ```
          */
         fun default(): ProxyConfig {
             return ProxyConfig(
