@@ -20,8 +20,8 @@ class BackendChannelInitializer(
             .addLast("java-exception", ExceptionLoggingHandler("backend"))
             .addLast("java-frame-decoder", JavaFrameDecoder())
             .addLast("java-packet-decoder", JavaPacketDecoder())
-            .addLast("java-packet-encoder", JavaPacketEncoder())
             .addLast("java-frame-encoder", JavaFrameEncoder())
+            .addLast("java-packet-encoder", JavaPacketEncoder())
             .addLast("java-inbound", BackendInboundHandler(session, sessionManager, javaToMlcMapper))
     }
 }

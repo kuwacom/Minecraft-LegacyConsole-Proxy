@@ -24,8 +24,8 @@ class FrontendChannelInitializer(
             .addLast("mlc-exception", ExceptionLoggingHandler("frontend"))
             .addLast("mlc-frame-decoder", MlcTransportFrameDecoder(transportMode))
             .addLast("mlc-packet-decoder", MlcPacketDecoder())
-            .addLast("mlc-packet-encoder", MlcPacketEncoder())
             .addLast("mlc-frame-encoder", MlcTransportFrameEncoder(transportMode))
+            .addLast("mlc-packet-encoder", MlcPacketEncoder())
             .addLast(
                 "mlc-inbound",
                 FrontendInboundHandler(config, sessionManager, upstreamConnector, mlcToJavaMapper)

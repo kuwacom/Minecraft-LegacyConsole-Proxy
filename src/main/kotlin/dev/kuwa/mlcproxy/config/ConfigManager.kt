@@ -53,11 +53,6 @@ object ConfigManager {
      *
      * - ファイルが存在すれば読み込む
      * - 存在しなければデフォルト設定を作成して保存する
-     *
-     * 例
-     * ```kotlin
-     * val config = ConfigManager.init()
-     * ```
      */
     fun init(path: Path = defaultPath): Config {
         synchronized(lock) {

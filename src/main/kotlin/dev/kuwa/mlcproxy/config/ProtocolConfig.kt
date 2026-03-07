@@ -17,7 +17,7 @@ data class ProtocolConfig(
                 mlcTransportMode = "LENGTH_PREFIXED_32BE",
                 mlcNetVersion = 560,
                 mlcGameProtocolVersion = 78,
-                javaProtocolVersion = 47,
+                javaProtocolVersion = 773,
                 javaHandshakeHost = "127.0.0.1",
                 javaHandshakePort = 25565
             )
